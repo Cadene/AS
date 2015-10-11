@@ -69,31 +69,6 @@ function plot_binaire_kernel(model, x, y, labels, colors, colorsReg, name)
     gnuplot.close()
 end
 
-function plot_network(name)
-    toPlot = {}
-    -- Region
-    xGrid = getRegionGrid(x,500)
-    xGridInputs = xGrid
-    yGrid_m1 = module_1:forward(xGrid)
-    yGrid_m2 = module_2:forward(yGrid_m1)
-    yGrid    = module_3:forward(yGrid_m2)
-    yGrid = yGrid:sign()
-    indices = torch.linspace(1,yGrid:size(1),yGrid:size(1)):long()
-    for i = 1, #labels do
-       local selected = indices[yGrid:eq(labels[i])]
-       table.insert(toPlot, toPlot2D(xGrid:index(1, selected), "region "..y[i], colorsReg[i]))
-    end
-    -- Points
-    indices = torch.linspace(1,y:size(1),y:size(1)):long()
-    for i = 1, #labels do
-       local selected = indices[y:eq(labels[i])]
-       table.insert(toPlot, toPlot2D(x:index(1, selected), "classe "..y[i], colors[i]))
-    end
-    gnuplot.pngfigure(name)
-    gnuplot.plot(toPlot)
-    gnuplot.close()
-end
-
 -- ReQU & MyLinear
 
 local ReQU, parent = torch.class('nn.ReQU', 'nn.Module')
@@ -159,27 +134,6 @@ function Linear:reset()
 end
 
 
--- test
-
-lin = nn.Linear(5,10)
-lin.bias:zero()
-lin:zeroGradParameters()
-
-mylin= nn.MyLinear(5,10)
-mylin.weight = lin.weight
-mylin:zeroGradParameters()
-
-q = torch.linspace(-9,10,5)
-
-d = torch.rand(10)
-
-lin:forward(q)
-mylin:forward(q)
-
-lin:accGradParameters(q,d)
-mylin:accGradParameters(q,d)
-
-
 
 -- générations du XOR
 
@@ -197,75 +151,16 @@ print(y:size())
 -- modèle linéaire avec kernel trick
 
 --nbIter = 1000
-nbIter = 1
-lr = 1e-4
-criterion = nn.MSECriterion()
-
-inputs = torch.cat(x, torch.cmul(x[{{},1}],x[{{},2}]),2)
-
-model = nn.MyLinear(3,1)
-for i = 1, nbIter do
-   shuffle = torch.randperm(inputs:size(1))
-   for j = 1, inputs:size(1) do
-      id = shuffle[j]
-      input = inputs[id]
-      label = torch.Tensor{y[id]}
-      model:zeroGradParameters()
-      output = model:forward(input)
-      loss = criterion:forward(output, label)
-      df_do = criterion:backward(output, label)
-      df_di = model:backward(input, df_do)
-      model:updateParameters(lr)
-      print(i,loss)
-   end
-end
-
---plot_binaire_kernel(model, x, y, labels, colors, colorsReg, 'kernel_xor.png')
-
-
--- modèle neural net une couche cachée
-
-nbIter = 1000
-lr = 1e-4
-criterion = nn.MSECriterion()
-
-module_1 = nn.Linear(2, 3)
-module_2 = nn.ReQU()
-module_3 = nn.Linear(3, 1)
-for i = 1, nbIter do
-   shuffle = torch.randperm(inputs:size(1))
-   for j = 1, x:size(1) do
-      id = shuffle[j]
-      input = x[id]
-      label = torch.Tensor{y[id]}
-      module_1:zeroGradParameters()
-      module_3:zeroGradParameters()
-      output_m1  = module_1:forward(input)
-      output_m2  = module_2:forward(output_m1)
-      output     = module_3:forward(output_m2)
-      loss       = criterion:forward(output, label)
-      dloss_do   = criterion:backward(output, label)
-      dloss_di   = module_3:backward(output_m2, dloss_do)
-      dloss_dom1 = module_2:backward(output_m1, dloss_di)
-      dloss_dom2 = module_1:backward(input, dloss_dom1)
-      module_1:updateParameters(lr)
-      module_3:updateParameters(lr)
-      print(i,loss)
-   end
-end
-
--- plot_network('net_XOR_ReQU.png')
-
-
-nbIter = 1000
+nbIter = 500
 lr = 1e-4
 criterion = nn.MSECriterion()
 
 module_1 = nn.MyLinear(2, 3)
-module_2 = nn.ReQU()
+module_2 = nn.ReLU()
 module_3 = nn.MyLinear(3, 1)
+
 for i = 1, nbIter do
-   shuffle = torch.randperm(inputs:size(1))
+   shuffle = torch.randperm(x:size(1))
    for j = 1, x:size(1) do
       id = shuffle[j]
       input = x[id]
@@ -286,6 +181,29 @@ for i = 1, nbIter do
    end
 end
 
-plot_network('net_XOR_ReQU_MyLinear.png')
+name = 'MyLinear_ReLU.png'
+
+    toPlot = {}
+    -- Region
+    xGrid = getRegionGrid(x,500)
+    yGrid_m1 = module_1:forward(xGrid)
+    yGrid_m2 = module_2:forward(yGrid_m1)
+    yGrid    = module_3:forward(yGrid_m2)
+    yGrid = yGrid:sign()
+    indices = torch.linspace(1,yGrid:size(1),yGrid:size(1)):long()
+    for i = 1, #labels do
+       local selected = indices[yGrid:eq(labels[i])]
+       table.insert(toPlot, toPlot2D(xGrid:index(1, selected), "region "..labels[i], colorsReg[i]))
+
+    end
+    -- Points
+    indices = torch.linspace(1,y:size(1),y:size(1)):long()
+    for i = 1, #labels do
+       local selected = indices[y:eq(labels[i])]
+       table.insert(toPlot, toPlot2D(x:index(1, selected), "classe "..labels[i], colors[i]))
+    end
+    gnuplot.pngfigure(name)
+    gnuplot.plot(toPlot)
+    gnuplot.close()
 
 
