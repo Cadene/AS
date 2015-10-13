@@ -5,8 +5,8 @@ mnist = require 'mnist'
 ---------------------------------------------------------------------------
 -- Apprentissage par descente de gradient
 function train(mlp, criterion, data, labels, lr, nIter)
-   lr = lr or 1e-5
-   nIter = nIter or 100
+   local lr = lr or 1e-5
+   local nIter = nIter or 100
    for i = 1,nIter do
       mlp:zeroGradParameters()
       y = mlp:forward(data)
