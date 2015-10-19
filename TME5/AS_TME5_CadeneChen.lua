@@ -57,55 +57,75 @@ end
 trainset = mnist.traindataset()
 testset = mnist.testdataset()
 
--- Constitution d'un ensemble d'apprentissage et de test à l'arrache
-nEx = 500
-classes = {6,8}
-nClass = #classes
+---------------------------------------------------------------------------
+---- Constitution d'un ensemble d'apprentissage et de test à l'arrache
+--nEx = 500
+--classes = {6,8}
+--nClass = #classes
+--trainData = torch.zeros(nEx,14*14)
+--testsData = torch.zeros(nEx,14*14)
+--trainLabels = torch.zeros(nEx)
+--testsLabels = torch.zeros(nEx)
+--i = 1
+--j = 1
+--while i <= nEx do
+--   for k = 1,nClass do
+--      if trainset.label[j] == classes[k] then
+--	 trainLabels[i] = k
+--	 trainData[i] = image.scale(trainset.data[j],14,14)
+--	 i = i + 1
+--	 break
+--      end
+--   end
+--   j = j + 1
+--end
+--i = 1
+--j = 1
+--while i <= nEx do
+--   for k = 1,nClass do
+--      if testset.label[j] == classes[k] then
+--	 testsLabels[i] = k
+--	 testsData[i] = image.scale(testset.data[j],14,14)
+--	 i = i + 1
+--	 break
+--      end
+--   end
+--   j = j + 1
+--end
+----trainData = (trainData / 128) - 1 --On mets les données entre -1 et 1
+----testsData = (testsData / 128) - 1
+--
+--trainData = (trainData / 256)
+--testsData = (testsData / 256)
+---------------------------------------------------------------------------
+classes = torch.range(0,9)
+nClass = (#classes)[1]
 
-trainData = torch.zeros(nEx,14*14)
-testsData = torch.zeros(nEx,14*14)
-trainLabels = torch.zeros(nEx)
+nEx = testset.size
+testsData = torch.zeros(nEx, 14*14)
 testsLabels = torch.zeros(nEx)
-i = 1
-j = 1
-while i <= nEx do
-   for k = 1,nClass do
-      if trainset.label[j] == classes[k] then
-	 trainLabels[i] = k
-	 trainData[i] = image.scale(trainset.data[j],14,14)
-	 i = i + 1
-	 break
-      end
-   end
-   j = j + 1
+for i=1,nEx do
+   testsLabels[i] = testset.label[i] + 1
+   testsData[i] = image.scale(testset.data[i],14,14)
 end
-i = 1
-j = 1
-while i <= nEx do
-   for k = 1,nClass do
-      if testset.label[j] == classes[k] then
-	 testsLabels[i] = k
-	 testsData[i] = image.scale(testset.data[j],14,14)
-	 i = i + 1
-	 break
-      end
-   end
-   j = j + 1
-end
---trainData = (trainData / 128) - 1 --On mets les données entre -1 et 1
---testsData = (testsData / 128) - 1
 
+nEx = trainset.size
+trainData = torch.zeros(nEx, 14*14)
+trainLabels = torch.zeros(nEx)
+for i=1,nEx do
+   trainLabels[i] = trainset.label[i] + 1
+   trainData[i] = image.scale(trainset.data[i],14,14)
+end
 trainData = (trainData / 256)
 testsData = (testsData / 256)
-
 ----------------------------------------------------------------------------
 -- Liste des tailles successives
 layerSize = {(#trainData)[2],
 	     100,
-	     50,
-	     20,
-	     10,
-	     5
+	     80,
+	     60,
+	     40,
+	     20
              }
 	     
 
@@ -134,7 +154,7 @@ deepEncoder = nn.Sequential()
 for i=1,(#autoEncoders) do
    print("AutoEncodeur ", i)
    x = deepEncoder:forward(trainData)
-   train(autoEncoders[i], mse, x, x)
+   train(autoEncoders[i], mse, x, x, 1e-1, 100)
    deepEncoder:add(encoders[i])
    deepEncoder:add(nn.Tanh())
    visualizeAutoEncoding(deepEncoder, buildDeepDecoder(decoders, i), trainData[{{1,5}}])
@@ -145,7 +165,7 @@ print("Clf:")
 classifier = nn.Linear(layerSize[#layerSize], nClass)
 nll = nn.CrossEntropyCriterion()
 x = deepEncoder:forward(trainData)
-train(classifier, nll, x, trainLabels)
+train(classifier, nll, x, trainLabels, 1e-1, 100)
 
 --Consitution du classifieur final
 deepClassifier = nn.Sequential()
@@ -164,7 +184,7 @@ end
 
 --FineTuning
 print("Fine tuning:")
-train(deepClassifier, nll, trainData, trainLabels, 1e-1, 100)
+train(deepClassifier, nll, trainData, trainLabels, 1e-1, 10)
 
 -- Evaluation en train
 pred = deepClassifier:forward(trainData)
