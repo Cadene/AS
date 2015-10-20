@@ -61,7 +61,7 @@ function visualizeAutoEncoding(deepEncoder, deepDecoder, data)
       local img = data[i]:reshape(imgSize,imgSize)
       image.save("input".. depth .."_" .. i .. ".png", img)
       img = deepDecoder:forward(deepEncoder:forward(data[i]))
-      img = image.scale((img/img:abs():max() + 1):abs():reshape(imgSize,imgSize),28,28)
+      img = image.scale(((img / (torch.abs(img):max()) + 1):abs()):reshape(imgSize,imgSize),28,28)
       image.save("output".. depth .. "_" .. i ..".png", img)
    end
 end
@@ -80,9 +80,9 @@ testset = mnist.testdataset()
 
 ---------------------------------------------------------------------------
 ---- Constitution d'un ensemble d'apprentissage et de test à l'arrache
-nEx = 500
+nEx = 1000
 --classes = {6,8}
-classes = {6,7,8}
+classes = {1,2,3,4,5,6,7,8,9,0}
 nClass = #classes
 trainData = torch.zeros(nEx,14*14)
 testsData = torch.zeros(nEx,14*14)
@@ -147,8 +147,8 @@ layerSize = {(#trainData)[2],
 	     100,
 	     80,
 	     60,
-	     40,
-	     20
+	     40
+--	     20
              }
 	     
 
@@ -165,6 +165,7 @@ autoEncoders = {}
 for i=1,#encoders do
    autoEncoder = nn.Sequential()
    autoEncoder:add(encoders[i])
+--   autoEncoder:add(nn.L1Penalty(0.05))
    autoEncoder:add(nn.Tanh())
    autoEncoder:add(decoders[i])
    --autoEncoder:add(nn.Tanh())
@@ -177,7 +178,7 @@ deepEncoder = nn.Sequential()
 for i=1,(#autoEncoders) do
    print("AutoEncodeur ", i)
    x = deepEncoder:forward(trainData)
-   train(autoEncoders[i], mse, x, x, 1e-1, 500)
+   train(autoEncoders[i], mse, x, x, 1e-1, 1000)
    deepEncoder:add(encoders[i])
    deepEncoder:add(nn.Tanh())
    visualizeAutoEncoding(deepEncoder, buildDeepDecoder(decoders, i), trainData[{{1,5}}])
@@ -188,7 +189,7 @@ print("Clf:")
 classifier = nn.Linear(layerSize[#layerSize], nClass)
 nll = nn.CrossEntropyCriterion()
 x = deepEncoder:forward(trainData)
-train(classifier, nll, x, trainLabels, 1e-1, 500)
+train(classifier, nll, x, trainLabels, 1e-1, 5000)
 
 --Consitution du classifieur final
 deepClassifier = nn.Sequential()
@@ -205,12 +206,27 @@ for i = 1,codeSize do
    image.save("decoding" .. i .. ".png", img)
 end
 
---FineTuning
+-- Evaluations sans fine-tuning---------------------------------
+-- Evaluation en train
+pred = deepClassifier:forward(trainData)
+__, pred = torch.max(pred,2)
+print("score train:")
+print(torch.add(trainLabels:long(),-pred):eq(0):double():mean())
+-- Evaluation en test
+pred = deepClassifier:forward(testsData)
+__, pred = torch.max(pred,2)
+print("score test:")
+print(torch.add(testsLabels:long(),-pred):eq(0):double():mean())
+
+
+
+--FineTuning----------------------------------------------------
 --Extraction des paramètres des encodeurs
-newParameters, newGradParameters = deepEncoder:getParameters()
-encodersParameters = newParameters:clone()
+--newParameters, newGradParameters = deepEncoder:getParameters()
+--encodersParameters = newParameters:clone()
 print("Fine tuning:")
-penalizedFineTuning(deepClassifier, nll, trainData, trainLabels, 0.3, 1e-1, 200)
+train(deepClassifier, nll, trainData, trainLabels, 1e-1, 500)
+--penalizedFineTuning(deepClassifier, nll, trainData, trainLabels, 0.3, 1e-1, 200)
 
 -- Evaluation en train
 pred = deepClassifier:forward(trainData)
