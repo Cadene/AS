@@ -24,6 +24,7 @@ function train(mlp, criterion, data, labels, lr, nIter)
    end
 end
 
+--[[
 function penalizedFineTuning(mlp, criterion, data, labels, l, lr, nIter)
    local lr = lr or 1e-1
    local nIter = nIter or 1000
@@ -44,12 +45,13 @@ function penalizedFineTuning(mlp, criterion, data, labels, l, lr, nIter)
       end
    end
 end
+]]--
 
 function buildDeepDecoder(decoders, depth)
    local decoder = nn.Sequential()
    for i = depth,1,-1 do
       decoder:add(decoders[i])
---      decoder:add(nn.Tanh())
+      decoder:add(nnActivationFunctionDec())
    end
    return decoder
 end
@@ -61,7 +63,8 @@ function visualizeAutoEncoding(deepEncoder, deepDecoder, data)
       local img = data[i]:reshape(imgSize,imgSize)
       image.save("input".. depth .."_" .. i .. ".png", img)
       img = deepDecoder:forward(deepEncoder:forward(data[i]))
-      img = image.scale(((img / (torch.abs(img):max()) + 1):abs()):reshape(imgSize,imgSize),28,28)
+      img = image.scale((img / img:max()):reshape(imgSize,imgSize),28,28)
+      img[img:lt(0)] = 0
       image.save("output".. depth .. "_" .. i ..".png", img)
    end
 end
@@ -70,6 +73,8 @@ function visualizeDecoding(deepDecoder, code)
    local img = deepDecoder:forward(code)
    local imgSize = math.sqrt((#img)[1])
    img = img:reshape(imgSize,imgSize)
+   img[img:lt(0)] = 0
+   img = img / img:max()
    return img
 end
 
@@ -91,28 +96,28 @@ testsLabels = torch.zeros(nEx)
 i = 1
 j = 1
 while i <= nEx do
-	for k = 1,nClass do
-		if trainset.label[j] == classes[k] then
-	trainLabels[i] = k
-	trainData[i] = image.scale(trainset.data[j],14,14)
-	i = i + 1
-	break
-    	end
-	end
-	j = j + 1
+   for k = 1,nClass do
+      if trainset.label[j] == classes[k] then
+	 trainLabels[i] = k
+	 trainData[i] = image.scale(trainset.data[j],14,14)
+	 i = i + 1
+	 break
+      end
+   end
+   j = j + 1
 end
 i = 1
 j = 1
 while i <= nEx do
-	for k = 1,nClass do
-    	if testset.label[j] == classes[k] then
-			testsLabels[i] = k
-			testsData[i] = image.scale(testset.data[j],14,14)
-			i = i + 1
-			break
-		end
-	end
-	j = j + 1
+   for k = 1,nClass do
+      if testset.label[j] == classes[k] then
+	 testsLabels[i] = k
+	 testsData[i] = image.scale(testset.data[j],14,14)
+	 i = i + 1
+	 break
+      end
+   end
+   j = j + 1
 end
 --trainData = (trainData / 128) - 1 --On mets les données entre -1 et 1
 --testsData = (testsData / 128) - 1
@@ -142,15 +147,34 @@ trainData = (trainData / 256)
 testsData = (testsData / 256)
 ]]--
 ----------------------------------------------------------------------------
+-- CONFIG --
+----------------------------------------------------------------------------
 -- Liste des tailles successives
 layerSize = {(#trainData)[2],
-	     100,
-	     80,
-	     60,
-	     40
+	     200,
+	     200,
+	     200,
+	     200,
+	     200
+--	     50,
 --	     20
-             }
-	     
+}
+
+lrAutoEnc = 1e-1
+lrClassif = 1e-1
+lrFineTune = 1e-1
+nEpochAutoEnc = 2000
+nEpochClassif = 2000
+nEpochFineTune = 500
+
+lambdaL1 = 1e-4
+
+nnActivationFunctionEnc = nn.Tanh
+nnActivationFunctionDec = nn.Identity
+--nnActivationFunctionDec = nn.Tanh  -- Pas bon
+
+-----------------------------------------------------------------------------
+
 
 -- Constitution des layers
 encoders = {}
@@ -165,10 +189,10 @@ autoEncoders = {}
 for i=1,#encoders do
    autoEncoder = nn.Sequential()
    autoEncoder:add(encoders[i])
---   autoEncoder:add(nn.L1Penalty(0.05))
-   autoEncoder:add(nn.Tanh())
+   autoEncoder:add(nn.L1Penalty(lambdaL1))
+   autoEncoder:add(nnActivationFunctionEnc())
    autoEncoder:add(decoders[i])
-   --autoEncoder:add(nn.Tanh())
+   autoEncoder:add(nnActivationFunctionDec())
    table.insert(autoEncoders, autoEncoder)
 end
 
@@ -178,9 +202,9 @@ deepEncoder = nn.Sequential()
 for i=1,(#autoEncoders) do
    print("AutoEncodeur ", i)
    x = deepEncoder:forward(trainData)
-   train(autoEncoders[i], mse, x, x, 1e-1, 1000)
+   train(autoEncoders[i], mse, x, x, lrAutoEnc, nEpochAutoEnc)
    deepEncoder:add(encoders[i])
-   deepEncoder:add(nn.Tanh())
+   deepEncoder:add(nnActivationFunctionEnc())
    visualizeAutoEncoding(deepEncoder, buildDeepDecoder(decoders, i), trainData[{{1,5}}])
 end
 
@@ -189,7 +213,7 @@ print("Clf:")
 classifier = nn.Linear(layerSize[#layerSize], nClass)
 nll = nn.CrossEntropyCriterion()
 x = deepEncoder:forward(trainData)
-train(classifier, nll, x, trainLabels, 1e-1, 5000)
+train(classifier, nll, x, trainLabels, lrClassif, nEpochClassif)
 
 --Consitution du classifieur final
 deepClassifier = nn.Sequential()
@@ -225,7 +249,7 @@ print(torch.add(testsLabels:long(),-pred):eq(0):double():mean())
 --newParameters, newGradParameters = deepEncoder:getParameters()
 --encodersParameters = newParameters:clone()
 print("Fine tuning:")
-train(deepClassifier, nll, trainData, trainLabels, 1e-1, 500)
+train(deepClassifier, nll, trainData, trainLabels, lrFineTune, nEpochFineTune)
 --penalizedFineTuning(deepClassifier, nll, trainData, trainLabels, 0.3, 1e-1, 200)
 
 -- Evaluation en train
@@ -240,6 +264,10 @@ __, pred = torch.max(pred,2)
 print("score test:")
 print(torch.add(testsLabels:long(),-pred):eq(0):double():mean())
 
+torch.save("deepClassifier.t", deepClassifier)
+torch.save("encoders.t", encoders)
+torch.save("decoders.t", decoders)
+torch.save("autoEncoders.t", autoEncoders)
 
 --[[ trois méthodes d'entrainement de l'encodeur
 1. sans Fine Tuning
