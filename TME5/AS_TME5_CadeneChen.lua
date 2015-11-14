@@ -4,22 +4,33 @@ mnist = require 'mnist'
 
 ---------------------------------------------------------------------------
 -- Apprentissage par descente de gradient
-function train(mlp, criterion, data, labels, lr, nIter)
+function train(mlp, criterion, data, labels, lr, nIter, miniBatchSize, decayTime)
    local lr = lr or 1e-1
    local nIter = nIter or 1000
+   local miniBatchSize = miniBatchSize or 200
    local choices = torch.LongTensor((#data)[1])
    for i = 1,nIter do
       mlp:zeroGradParameters()
-      choices:random((#data)[1])
-      local x = data:index(1,choices)
-      local y = labels:index(1,choices)
-      local pred = mlp:forward(x)
-      local loss = criterion:forward(pred,y)
-      local df_do = criterion:backward(pred,y)
-      local df_di = mlp:backward(x, df_do)
-      mlp:updateParameters(lr)
-      if i % 10 == 0 then
+      choices:randperm((#data)[1])
+      local j = 1
+      local loss = 0
+      while j <= (#data)[1] do
+	 local k = math.min((#data)[1], j+miniBatchSize-1)
+	 local x = data:index(1,choices[{{j,k}}])
+	 local y = labels:index(1,choices[{{j,k}}])
+	 local pred = mlp:forward(x)
+	 loss = loss + criterion:forward(pred,y)
+	 local df_do = criterion:backward(pred,y)
+	 local df_di = mlp:backward(x, df_do)
+	 mlp:updateParameters(lr)
+	 j = j + miniBatchSize
+      end
+      if i % 1 == 0 then
 	 print(i,loss)
+	 if i % decayTime == 0 then
+	    lr = lr / 2
+	    print('new learning rate = ', lr)
+	 end
       end
    end
 end
@@ -71,11 +82,17 @@ end
 
 function visualizeDecoding(deepDecoder, code)
    local img = deepDecoder:forward(code)
+   if ((not imgZero) or ((#img)[1] ~= (#imgZero)[1])) then
+      local codeZ = torch.zeros(#code)
+      imgZero = deepDecoder:forward(codeZ):clone()
+      visualizeDecoding(deepDecoder, codeZ)
+      img = deepDecoder:forward(code)
+   end
    local imgSize = math.sqrt((#img)[1])
-   img = img:reshape(imgSize,imgSize)
-   img[img:lt(0)] = 0
-   img = img / img:max()
-   return img
+   --local visu = torch.zeros(imgSize,imgSize)
+   local visu = (img - imgZero):reshape(imgSize, imgSize)
+   visu = visu / torch.abs(visu):max()
+   return visu
 end
 
 ---------------------------------------------------------------------------
@@ -85,8 +102,8 @@ testset = mnist.testdataset()
 
 ---------------------------------------------------------------------------
 ---- Constitution d'un ensemble d'apprentissage et de test à l'arrache
-nEx = 1000
---classes = {6,8}
+--[[
+nEx = 10000
 classes = {1,2,3,4,5,6,7,8,9,0}
 nClass = #classes
 trainData = torch.zeros(nEx,14*14)
@@ -123,8 +140,8 @@ end
 --testsData = (testsData / 128) - 1
 trainData = (trainData / 256)
 testsData = (testsData / 256)
+]]
 ---------------------------------------------------------------------------
---[[
 classes = torch.range(0,9)
 nClass = (#classes)[1]
 
@@ -143,31 +160,38 @@ for i=1,nEx do
    trainLabels[i] = trainset.label[i] + 1
    trainData[i] = image.scale(trainset.data[i],14,14)
 end
-trainData = (trainData / 256)
-testsData = (testsData / 256)
-]]--
+trainData = (trainData / 255)
+testsData = (testsData / 255)
+
 ----------------------------------------------------------------------------
 -- CONFIG --
 ----------------------------------------------------------------------------
 -- Liste des tailles successives
 layerSize = {(#trainData)[2],
-	     200,
-	     200,
-	     200,
-	     200,
-	     200
---	     50,
---	     20
+	     50,
+	     50,
+	     50,
+	     50,
+	     50
 }
 
-lrAutoEnc = 1e-1
-lrClassif = 1e-1
-lrFineTune = 1e-1
-nEpochAutoEnc = 2000
-nEpochClassif = 2000
-nEpochFineTune = 500
+lrAutoEnc = 1e-2
+lrClassif = 1e-3
+lrFineTune = 1e-6
+-- score de 0.9173 avec lrFineTune = 5e-09
+nEpochAutoEnc = 200
+nEpochClassif = 200
+nEpochFineTune = 200
+decayTime = 30
+miniBatchSize = 20
 
-lambdaL1 = 1e-4
+lambdaL1 = {1e-4,
+	    1e-4,
+	    1e-6,
+	    1e-8,
+	    5e-10}
+
+
 
 nnActivationFunctionEnc = nn.Tanh
 nnActivationFunctionDec = nn.Identity
@@ -189,7 +213,7 @@ autoEncoders = {}
 for i=1,#encoders do
    autoEncoder = nn.Sequential()
    autoEncoder:add(encoders[i])
-   autoEncoder:add(nn.L1Penalty(lambdaL1))
+   autoEncoder:add(nn.L1Penalty(lambdaL1[i]))
    autoEncoder:add(nnActivationFunctionEnc())
    autoEncoder:add(decoders[i])
    autoEncoder:add(nnActivationFunctionDec())
@@ -197,37 +221,44 @@ for i=1,#encoders do
 end
 
 -- Entrainement des AutoEncodeurs et stacking des couches
-mse = nn.MSECriterion()
 deepEncoder = nn.Sequential()
 for i=1,(#autoEncoders) do
    print("AutoEncodeur ", i)
    x = deepEncoder:forward(trainData)
-   train(autoEncoders[i], mse, x, x, lrAutoEnc, nEpochAutoEnc)
+   train(autoEncoders[i], nn.MSECriterion(), x, x, lrAutoEnc, nEpochAutoEnc, miniBatchSize, decayTime)
    deepEncoder:add(encoders[i])
    deepEncoder:add(nnActivationFunctionEnc())
-   visualizeAutoEncoding(deepEncoder, buildDeepDecoder(decoders, i), trainData[{{1,5}}])
+   visualizeAutoEncoding(deepEncoder, buildDeepDecoder(decoders, i), trainData[{{1,10}}])
 end
 
 --Entrainement du classifieur lineaire
 print("Clf:")
 classifier = nn.Linear(layerSize[#layerSize], nClass)
-nll = nn.CrossEntropyCriterion()
 x = deepEncoder:forward(trainData)
-train(classifier, nll, x, trainLabels, lrClassif, nEpochClassif)
+train(classifier, nn.CrossEntropyCriterion(), x, trainLabels, lrClassif, nEpochClassif, miniBatchSize, decayTime)
 
 --Consitution du classifieur final
 deepClassifier = nn.Sequential()
 deepClassifier:add(deepEncoder)
 deepClassifier:add(classifier)
 
---Visualiser un decodage de la dernière couche:
-codeSize = layerSize[#layerSize]
-for i = 1,codeSize do
-   code = torch.zeros(codeSize)
-   code[i] = 1
-   img = visualizeDecoding(buildDeepDecoder(decoders, #decoders), code)
-   img = image.scale(img, 28,28)
-   image.save("decoding" .. i .. ".png", img)
+--Visualiser un decodage:
+for d = 1,#decoders do
+   deepDecoder = buildDeepDecoder(decoders, d)
+   codeSize = layerSize[d+1]
+   for i = 1,codeSize do
+      code = torch.zeros(codeSize)
+      code[i] = 1
+      img = visualizeDecoding(deepDecoder, code)
+      img = image.scale(img,28,28)
+      local decoding3 = torch.zeros(3,28,28)
+      decoding3[1] = img
+      decoding3[2] = -img
+      decoding3[1][img:lt(0)] = 0
+      decoding3[2][(-img):lt(0)] = 0
+--      image.save("decoding" .. d .. "_" .. i .. ".png", img)
+      image.save("decodingColor" .. d .. "_" .. i .. ".png", decoding3)
+   end
 end
 
 -- Evaluations sans fine-tuning---------------------------------
@@ -249,8 +280,8 @@ print(torch.add(testsLabels:long(),-pred):eq(0):double():mean())
 --newParameters, newGradParameters = deepEncoder:getParameters()
 --encodersParameters = newParameters:clone()
 print("Fine tuning:")
-train(deepClassifier, nll, trainData, trainLabels, lrFineTune, nEpochFineTune)
---penalizedFineTuning(deepClassifier, nll, trainData, trainLabels, 0.3, 1e-1, 200)
+train(deepClassifier, nn.CrossEntropyCriterion(), trainData, trainLabels, lrFineTune, nEpochFineTune, miniBatchSize, decayTime)
+--penalizedFineTuning(deepClassifier, nn.CrossEntropyCriterion(), trainData, trainLabels, 0.3, 1e-1, 200)
 
 -- Evaluation en train
 pred = deepClassifier:forward(trainData)
@@ -263,20 +294,3 @@ pred = deepClassifier:forward(testsData)
 __, pred = torch.max(pred,2)
 print("score test:")
 print(torch.add(testsLabels:long(),-pred):eq(0):double():mean())
-
-torch.save("deepClassifier.t", deepClassifier)
-torch.save("encoders.t", encoders)
-torch.save("decoders.t", decoders)
-torch.save("autoEncoders.t", autoEncoders)
-
---[[ trois méthodes d'entrainement de l'encodeur
-1. sans Fine Tuning
-2. avec Fine Tuning 
-3. avec Fine Tuning et contrainte : lambda * ||Teta_1 - Teta_1^*||
-
-Visualisation
-
-D'autres bases de données
-
--- Pour le 17 novembre
-]]--
