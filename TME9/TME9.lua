@@ -15,10 +15,33 @@ for key,value in pairs(v.vocab_mapping) do
   v.number_mapping[value] = key
 end
 
-v.vectorize = function (id)
-  local out = torch.zeros(v.vocab_size)
-  out[id] = 1
-  return out
+v.vectorize = function (key)
+  local vector = torch.zeros(v.vocab_size)
+  vector[key] = 1
+  return vector
+end
+
+v.scalarize = function (vector)
+  local _, key = torch.max(vector, 1)
+  return key
+end
+
+v.decode_outputs = function (outputs)
+  local string = ''
+  for i = 1, #outputs do
+    local key = torch.squeeze(v.scalarize(outputs[i])) -- tensor1 to scalar
+    string = string .. v.number_mapping[key]
+  end
+  return string
+end
+
+v.decode_batch = function (batch)
+  local string = ''
+  for i = 1, v.seq_length do
+    local key = batch[{1,i}]
+    string = string .. v.number_mapping[key]
+  end  
+  return string
 end
 
 dimx = v.vocab_size
@@ -90,18 +113,22 @@ function train(nbIter, lr)
   end
 end
 
+train(10,1e-2)
 
 -- 5 --
 
 shuffle = torch.randperm(v.nbatches)
 id = shuffle[1]
+batch = v.x_batches[id]
 inputs = {}
 inputs[1] = torch.zeros(dimh)
 for k = 1, seqSize do
-  print(v.number_mapping( v.x_batches[id][{1,k}] ))
-  inputs[k+1] = v.vectorize(v.x_batches[id][{1,k}])
+  inputs[k+1] = v.vectorize(batch[{1,k}])
 end
 outputs = model:forward(inputs)
+
+print(v.decode_batch(batch))
+print(v.decode_outputs(outputs))
 
 
 
