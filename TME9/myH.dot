@@ -1,0 +1,60 @@
+digraph G {
+	graph [bb="0,0,532.39,634.61"];
+	node [label="\N",
+		shape=oval
+	];
+	n1	 [height=0.74639,
+		label="Node1\nmodule = nn.Tanh",
+		pos="265.69,116.61",
+		tooltip="[[string \"h_tanh = nn.Tanh()(h_sum)\"]]:1",
+		width=2.3374];
+	n2	 [height=0.74639,
+		label="Node2\ninput = {}",
+		pos="265.69,26.87",
+		tooltip="[[C]]:-1",
+		width=1.4535];
+	n1 -> n2	 [pos="e,265.69,53.874 265.69,89.285 265.69,81.319 265.69,72.428 265.69,63.939"];
+	n3	 [height=1.041,
+		label="Node3\nmodule = nn.CAddTable\lmapindex = {Node4,Node5}",
+		pos="265.69,216.96",
+		tooltip="[[string \"h_sum = nn.CAddTable()({h_linH, h_linW})\"]]:1",
+		width=3.457];
+	n3 -> n1	 [pos="e,265.69,143.52 265.69,179.34 265.69,170.97 265.69,162.07 265.69,153.72"];
+	n4	 [height=0.74639,
+		label="Node4\nmodule = nn.Linear(10 -> 10)",
+		pos="128.69,317.3",
+		tooltip="[[string \"h_linH = nn.Linear(dimh, dimh)()\"]]:1",
+		width=3.5748];
+	n4 -> n3	 [pos="e,218.68,251.7 163.62,291.23 177.86,281.01 194.68,268.93 210.51,257.57"];
+	n5	 [height=0.74639,
+		label="Node5\nmodule = nn.Linear(31 -> 10)",
+		pos="403.69,317.3",
+		tooltip="[[string \"h_linW = nn.Linear(dimx, dimh)()\"]]:1",
+		width=3.5748];
+	n5 -> n3	 [pos="e,313.05,251.7 368.51,291.23 354.16,281.01 337.22,268.93 321.28,257.57"];
+	n6	 [height=1.041,
+		label="Node6\ninput = {}\lselectindex = 1",
+		pos="157.69,417.65",
+		tooltip="[[C]]:-1-1",
+		width=1.9642];
+	n6 -> n4	 [pos="e,136.33,344.2 147.06,380.59 144.5,371.92 141.77,362.66 139.22,354.01"];
+	n7	 [height=1.041,
+		label="Node7\ninput = {}\lselectindex = 2",
+		pos="374.69,417.65",
+		tooltip="[[C]]:-1-2",
+		width=1.9642];
+	n7 -> n5	 [pos="e,396.06,344.2 385.33,380.59 387.88,371.92 390.61,362.66 393.16,354.01"];
+	n8	 [height=0.74639,
+		label="Node8\nnSplitOutputs = 2",
+		pos="236.69,518",
+		tooltip="[[C]]:-1-mnode",
+		width=2.2392];
+	n8 -> n6	 [pos="e,184.95,452.58 216.55,491.93 208.9,482.4 199.97,471.28 191.4,460.61"];
+	n8 -> n7	 [pos="e,333.26,448.18 269.75,493.44 286.27,481.66 306.62,467.17 324.98,454.08"];
+	n9	 [height=0.74639,
+		label="Node9\ninput = {}",
+		pos="236.69,607.74",
+		tooltip="[[C]]:-1",
+		width=1.4535];
+	n9 -> n8	 [pos="e,236.69,545 236.69,580.41 236.69,572.45 236.69,563.55 236.69,555.07"];
+}

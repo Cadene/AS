@@ -1,0 +1,29 @@
+digraph G {
+	graph [bb="0,0,257.39,322.96"];
+	node [label="\N",
+		shape=oval
+	];
+	n1	 [height=0.74639,
+		label="Node1\nmodule = nn.SoftMax",
+		pos="128.69,116.61",
+		tooltip="[[string \"g_softMax = nn.SoftMax()(g_linear)\"]]:1",
+		width=2.7302];
+	n2	 [height=0.74639,
+		label="Node2\ninput = {}",
+		pos="128.69,26.87",
+		tooltip="[[C]]:-1",
+		width=1.4535];
+	n1 -> n2	 [pos="e,128.69,53.874 128.69,89.285 128.69,81.319 128.69,72.428 128.69,63.939"];
+	n3	 [height=0.74639,
+		label="Node3\nmodule = nn.Linear(10 -> 31)",
+		pos="128.69,206.35",
+		tooltip="[[string \"g_linear = nn.Linear(dimh, dimx)()\"]]:1",
+		width=3.5748];
+	n3 -> n1	 [pos="e,128.69,143.61 128.69,179.03 128.69,171.06 128.69,162.17 128.69,153.68"];
+	n4	 [height=0.74639,
+		label="Node4\ninput = {}",
+		pos="128.69,296.09",
+		tooltip="[[C]]:-1",
+		width=1.4535];
+	n4 -> n3	 [pos="e,128.69,233.35 128.69,268.77 128.69,260.8 128.69,251.91 128.69,243.42"];
+}

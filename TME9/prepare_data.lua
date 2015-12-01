@@ -14,3 +14,4 @@ cmd:text()
 params = cmd:parse(arg)
 CharLMMinibatchLoader.text_to_tensor(params.txt, params.vocab, params.data)
 
+--th prepare_data.lua -txt 
