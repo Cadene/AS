@@ -1,4 +1,6 @@
-require 'torch'
+-- OMP_NUM_THREADS=1 th exec
+-- à exec, car ça peut speedup si nos matrice sont petites
+
 require 'torch'
 require 'nn'
 require 'nngraph'
@@ -45,25 +47,50 @@ v.decode_batch = function (batch)
   return string
 end
 
-dimx = v.vocab_size
-dimh = 10
+dim_x = v.vocab_size
+dim_h = 10
 seqSize = v.seq_length
 
--- 1 --
-g_linear = nn.Linear(dimh, dimx)()
-g_softMax = nn.SoftMax()(g_linear)
-g = nn.gModule({g_linear}, {g_softMax})
---graph.dot(g.fg, 'G', 'myG')
+function module_LSTM(dim_x, dim_h):
+  local input_x = nn.Identity()()
+  local input_c = nn.Identity()()
+  local input h = nn.Identity()()
 
--- 2 --
-h_linH = nn.Linear(dimh, dimh)()
-h_linW = nn.Linear(dimx, dimh)()
-h_sum = nn.CAddTable()({h_linH, h_linW})
-h_tanh = nn.Tanh()(h_sum)
-h = nn.gModule({h_linH, h_linW}, {h_tanh})
---graph.dot(h.fg, 'H', 'myH')
+  local lin_xi = nn.Linear(dim_x, dim_h)(input_x)
+  local lin_hi = nn.Linear(dim_h, dim_h)(input_h)
+  local lin_ci = nn.CMul(dim_h)(input_c)
+  local biais_i = nn.Linear(1, dim_h)()
+  local output_i = nn.Sigmoid()(nn.CAddTable()({lin_xi, lin_hi, lin_ci, biais_i}))
+  
+  local lin_xf = nn.Linear(dim_f, dim_h)(input_x)
+  local lin_hf = nn.Linear(dim_h, dim_h)(input_h)
+  local lin_cf = nn.CMul(dim_h)(input_c)
+  local biais_f = nn.Linear(1, dim_h)()
+  local output_f = nn.Sigmoid()(nn.CAddTable()({lin_xf, lin_hf, lin_cf, biais_f}))
 
--- 3 --
+  local mult1_c = torch.cmul(output_f, input_c) -- avoid gradient vanishing
+  local lin_xc = nn.Linear(dim_f, dim_h)(input_x)
+  local lin_hc = nn.Linear(dim_h, dim_h)(input_h)
+  local biais_c = nn.Linear(1, dim_h)()
+  local tanh_c = nn.Tanh()(nn.CAddTable(){lin_xc, lin_hc, biais_c})
+  local mult2_c = nn.CMulTable()({output_i, tanh_c})
+  local output_c = nn.CAddTable()({mult1_c, mult2_c})
+
+  local lin_xo = nn.Linear(dim_f, dim_h)(input_x)
+  local lin_ho = nn.Linear(dim_h, dim_h)(input_h)
+  local lin_co = nn.CMul(dim_h)(input_c)
+  local biais_o = nn.Linear(1, dim_h)()
+  local output_f = nn.Sigmoid()(nn.CAddTable()({lin_xo, lin_ho, lin_co, biais_o}))
+
+  local output_h = nn.CMulTable()({output_o, output_c})
+
+  return nn.gModule({input_h, input_c, input_x}, {output_h, output_c, output_x})
+end
+
+LSTM = module_LSTM(dim_x, dim_h)
+
+graph.dot(LSTM.fg, 'LSTM', 'myLSTM')
+
 modules_H = model_utils.clone_many_times(h, seqSize)
 modules_G = model_utils.clone_many_times(g, seqSize)
 
@@ -78,9 +105,9 @@ for i = 1, seqSize do
   outputs[i] = modules_G[i](list_h[i+1])
 end
 model = nn.gModule(inputs, outputs)
---graph.dot(model.fg, 'model', 'myModel')
 
--- 4 --
+model
+
 criterion = nn.ParallelCriterion()
 for i = 1, seqSize do
   criterion:add(nn.ClassNLLCriterion(), 1.0/seqSize)
@@ -98,9 +125,10 @@ function train(nbIter, lr)
       print('batch:', j)
       local id = shuffle[j]
       local inputs = {}
-      inputs[1] = torch.zeros(dimh)
+      inputs[1] = torch.zeros(dim_h) -- input_h
+      inputs[2] = torch.zeros(dim_h) -- input_c
       for k = 1, seqSize do
-        inputs[k+1] = v.vectorize(v.x_batches[id][{1,k}])
+        inputs[k+2] = v.vectorize(v.x_batches[id][{1,k}])
       end
       local labels = {}
       for k = 1, seqSize do
@@ -134,7 +162,7 @@ shuffle = torch.randperm(v.nbatches)
 id = shuffle[1]
 batch = v.x_batches[id]
 inputs = {}
-inputs[1] = torch.zeros(dimh)
+inputs[1] = torch.zeros(dim_h)
 for k = 1, seqSize do
   inputs[k+1] = v.vectorize(batch[{1,k}])
 end
@@ -155,7 +183,7 @@ print(v.decode_outputs(outputs))
 moduleComplet = {}
 moduleComplet.listH = listH
 moduleComplet.listG = listG
-moduleComplet.dimh = dimh
+moduleComplet.dim_h = dim_h
 moduleComplet.seqSize = seqSize
 
 
