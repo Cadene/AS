@@ -1,46 +1,29 @@
-local class = require 'class'
 
-local RNN = class('RNN')
+local rnn = {}
 
-function RNN.create(input_size, rnn_size, seq_size, dropout, graph2fig)
+function rnn.create(dim_x, dim_h)--, dropout, graph2fig)
 
-    local dropout = dropout or 0
-    local graph2fig = graph2fig or true
+  local h0 = nn.Identity()()
+  local x = nn.Identity()()
+  local xs = nn.SplitTable(2)(x)
+  local h = h0
+  for i=1,dim_x do
+    local xi = nn.Reshape(1)(nn.SelectTable(i)(xs)) -- Reshape(1) for batch
+    local jt = nn.JoinTable(2,2){h, xi} -- JointTable(2,2) for batch
+    h = nn.Tanh()(nn.Linear(dim_h+1, dim_h)(jt)) -- 1 layer rnn
+  end
+  local y = nn.Linear(dim_h, 1)(h)
+  local model = nn.gModule({h0, x}, {y})
+  
+  local table_params, table_gradParams = model:parameters()
+  for t=2,dim_x do
+    table_params[2*t-1]:set(table_params[1]) -- share weigths matrix
+    table_params[2*t]:set(table_params[2]) -- share biais vector
+    table_gradParams[2*t-1]:set(table_gradParams[1]) -- gradient estimate
+    table_gradParams[2*t]:set(table_gradParams[2]) -- gradient estimate
+  end
 
-    local g_linear = nn.Linear(rnn_size, input_size)()
-    local g_softmax = nn.SoftMax()(g_linear)
-    local g = nn.gModule({g_linear}, {g_softmax})
-
-    local h_linH = nn.Linear(rnn_size, rnn_size)()
-    local h_linW = nn.Linear(input_size, rnn_size)()
-    local h_sum = nn.CAddTable()({h_linH, h_linW})
-    local h_tanh = nn.Tanh()(h_sum)
-    local h = nn.gModule({h_linH, h_linW}, {h_tanh})
-
-    local modules_H = ModelUtil.clone_many_times(h, seq_size)
-    local modules_G = ModelUtil.clone_many_times(g, seq_size)
-
-    local inputs  = {}
-    local outputs = {}
-    local list_h  = {}
-    inputs[1] = nn.Identity()()
-    list_h[1] = inputs[1]
-    for i = 1, seq_size do
-      inputs[i+1] = nn.Identity()()
-      list_h[i+1] = modules_H[i]({list_h[i],inputs[i+1]})
-      outputs[i] = modules_G[i](list_h[i+1])
-    end
-    local model = nn.gModule(inputs, outputs)
-
-    if graph2fig then
-        graph.dot(g.fg, 'RNN_G', 'RNN_G')
-        graph.dot(h.fg, 'RNN_H', 'RNN_H')
-        graph.dot(model.fg, 'RNN', 'RNN')
-        graph.dot(modules_H.fg, 'RNN_mod_H', 'RNN_mod_H')
-        graph.dot(modules_G.fg, 'RNN_mod_G', 'RNN_mod_G')
-    end
-    
-    return model
+  return model
 end
 
-return RNN
+return rnn

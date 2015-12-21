@@ -4,12 +4,26 @@ csv = require 'util/csv'
 
 -- http://kbullaughey.github.io/lstm-play/toy/
 
-n = 100
-std = 0.2
-max_output = 10
-output = torch.rand(n,1):mul(max_output)
-input = toy.output_to_input(output, std)
+g = {} -- gendata 
+g.min_y = -2
+g.max_y = 10
+g.std = .2
+g.len = 3
+g.delta = 1
+torch.save('data/toy_gendata.t7', g)
 
-data = nn.JoinTable(2):forward{input,output}
+data_n = 70000
+data = toy.generate_data(data_n, g.max_y, g.std, g.len, g.delta)
+label = {}
+for i=1,g.len do
+  label[i] = 'x'..i
+  label[i+g.len] = 'y'..i
+end
+csv.tensor_to_csv(data, 'data/toy.csv', label)
+torch.save('data/toy.t7', data)
 
-csv.tensor_to_csv(data, 'data/gendata.csv', {'n','n-1','n-2','output'})
+curve_n = 100
+curve = toy.generate_curve(curve_n, g.min_y, g.max_y)
+csv.tensor_to_csv(curve, 'data/toy_curve.csv', {'x','y'})
+
+-- END
