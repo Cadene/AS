@@ -1,6 +1,5 @@
 nn = require 'nn'
 require 'nngraph'
-mlp = require 'model/mlp'
 rnn = require 'model/rnn'
 csv = require 'util/csv'
 toy = require 'util/toy'
@@ -38,6 +37,10 @@ x_train = (x_train - x_train_mean) / x_train_std
 x_test = (x_test - x_train_mean) / x_train_std
 
 -- prepare data structure (trainer)
+function initial_h(batch_size, dim_h)
+  return torch.zeros(batch_size, dim_h)
+end
+
 dataset = {}
 function dataset:size()
   return torch.floor(n_train / batch_size)
@@ -45,29 +48,36 @@ end
 for i=1,dataset:size() do
   local start = (i-1)*batch_size + 1
   dataset[i] = {}
-  dataset[i][1] = x_train:narrow(1, start, batch_size)
+  dataset[i][1] = {}
+  dataset[i][1][1] = initial_h(batch_size, dim_h)
+  dataset[i][1][2] = x_train:narrow(1, start, batch_size)
   dataset[i][2] = y_train:narrow(1, start, batch_size)
 end
 
--- model = mlp.create(gendata.len, dim_h, 1, dropout)
 model = rnn.create(gendata.len, dim_h)
 parameters, gradParameters = model:getParameters()
 criterion = nn.MSECriterion()
+
+function model:accUpdateGradParameters(input, gradOutput, lr)
+  gradParameters:zero()
+  self:accGradParameters(input, gradOutput, 1)
+  parameters:add(-lr, gradParameters) -- beware of globals
+end
 
 trainer = nn.StochasticGradient(model, criterion)
 trainer.maxIteration = max_iteration
 trainer.learningRate = learning_rate
 function trainer:hookIteration(iter)
-  print(iter.."# test error = " .. criterion:forward(model:forward(x_test), y_test))
+  print(iter.."# test error = " .. criterion:forward(model:forward{initial_h(n_test, dim_h), x_test}, y_test))
 end
 
 parameters:uniform(-0.1, 0.1)
-model:zeroGradParameters()
+--model:zeroGradParameters()
 print("parameter count: " .. parameters:size(1))
 print(x_test:size())
-print("initial error before training = " .. criterion:forward(model:forward(x_test), y_test))
+print("initial error before training = " .. criterion:forward(model:forward{initial_h(n_test, dim_h), x_test}, y_test))
 trainer:train(dataset)
-print("# testing error = " .. model:forward(x_test):dot(y_test:t())/n_test)
+print("# testing error = " .. model:forward{initial_h(n_test, dim_h), x_test}:dot(y_test:t())/n_test)
 
 torch.save('data/mlp.t7', model)
 
@@ -77,7 +87,7 @@ data_disp = toy.generate_data(grid_size, gendata.max_y, 0.0, gendata.len, gendat
 x_disp = data_disp:narrow(2, 1, len)
 y_true = data_disp:narrow(2, len+1, 1)
 x_feed = (x_disp - x_train_mean) / x_train_std
-y_pred = model:forward(x_feed)
+y_pred = model:forward{initial_h(grid_size, dim_h), x_feed}
 disp = nn.JoinTable(2):forward{x_disp, y_true, y_pred}
 label = {}
 for i=1,len do
