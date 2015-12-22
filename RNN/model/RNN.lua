@@ -23,6 +23,8 @@ function rnn.create(dim_x, dim_h)--, dropout, graph2fig)
     table_gradParams[2*t]:set(table_gradParams[2]) -- gradient estimate
   end
 
+  model.parameters, model.gradParameters = model:getParameters()
+
   return model
 end
 
