@@ -2,18 +2,67 @@ nn = require 'nn'
 require 'nngraph'
 
 csv = require 'util/csv'
-toy = require 'util/toy'
 
 -- set global variables 
 opt = {}
 opt.model = 'rnn'
 
 batch_size = 20
-dim_h = 26
+dim_h = 5
+dim_xi = 2
 dropout = .5
-max_iteration = 1
+max_iteration = 30
 learning_rate = 0.02
 cuda = false
+
+function create_dataset(len_max, pc_train)
+  a = {0,1}
+  b = {1,0}
+  pad = {0,0}
+  nb_a_max = len_max / 2
+  tab_input = {}
+  for nb_a=1,nb_a_max do
+    nb_b = nb_a
+    nb_pad = len_max - (nb_a + nb_b)
+    input = {}
+    for i=1,nb_pad do
+      input[i] = pad
+    end
+    for i=1,nb_a do
+      input[i+nb_pad] = a
+      input[i+nb_pad+nb_a] = b
+    end
+    table.insert(tab_input, torch.Tensor(input):t())
+  end
+  return tab_input
+end
+
+len_max = 20
+tab_input = create_dataset(len_max, 1)
+
+rnn = require 'model/rnn'
+
+
+model = rnn.create(len_max, dim_h, 2)
+
+model:forward{torch.zeros(1,dim_h), tab_input[1]}
+
+
+--[[
+print(tab_input[1])
+xs = nn.SplitTable(2):forward(tab_input[1])
+print(xs)
+h = torch.zeros(1,dim_h)
+print(h)
+print(xs[1])
+xi = nn.Reshape(1,dim_xi):forward(xs[1])
+print(xi)
+jt = nn.JoinTable(2,2):forward{h,xi}
+print(jt)
+h = nn.Tanh():forward(nn.Linear(dim_h+dim_xi, dim_h):forward(jt))
+print(h)
+
+--[[
 
 gendata = torch.load('data/toy_gendata.t7')
 data = torch.load('data/toy.t7')
@@ -131,5 +180,5 @@ label[len+2] = 'y_pred'
 csv.tensor_to_csv(disp, 'data/toy_disp.csv', label)
 
 print("# display error = " .. y_pred:dot(y_true:t())/grid_size)
-
+]]
 -- END

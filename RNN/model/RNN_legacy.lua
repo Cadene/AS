@@ -1,6 +1,4 @@
-local class = require 'class'
-
-local RNN = class('RNN')
+local RNN = torch.class('RNN')
 
 function RNN.create(input_size, rnn_size, seq_size, dropout, graph2fig)
 
