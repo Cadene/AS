@@ -12,6 +12,8 @@ function mlp.create(dim_x, dim_h, dim_y, dropout)
   -- model:add(nn.Dropout(dropout))
   model:add(nn.Linear(20, dim_y))
 
+  model.parameters, model.gradParameters = model:getParameters()
+
   return model
 end
 

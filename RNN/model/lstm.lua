@@ -7,7 +7,7 @@ local MapLinear = function(dim_i, dim_o)
   return l
 end
 
-function lstm.create(dim_x, dim_h, dim_xi)--, dropout, graph2fig)
+function lstm.create(seq_len, dim_h, dim_xi)--, dropout, graph2fig)
 
   linear_map = {}
 
@@ -19,7 +19,7 @@ function lstm.create(dim_x, dim_h, dim_xi)--, dropout, graph2fig)
 
   local h = h0
   local c = c0
-  for i=1,dim_x do
+  for i=1,seq_len do
     --local xi = nn.Reshape(1)(nn.SelectTable(i)(xs)) -- Reshape(1) for batch
     local xi = nn.Reshape(1)(nn.SelectTable(i)(xs))
 
@@ -53,8 +53,8 @@ function lstm.create(dim_x, dim_h, dim_xi)--, dropout, graph2fig)
 
   model.name = 'lstm'
 
-  local linear_count = #linear_map / dim_x
-  for i=2,dim_x do
+  local linear_count = #linear_map / seq_len
+  for i=2,seq_len do
     for l=1,linear_count do
       local first_linear = linear_map[i] -- first instance
       local current_linear = linear_map[(i-1)*linear_count+i]
