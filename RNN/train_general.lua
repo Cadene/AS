@@ -1,5 +1,6 @@
 nn = require 'nn'
 require 'nngraph'
+posix = require 'posix'
 
 -- set global variables 
 opt = {}
@@ -15,6 +16,7 @@ and reused in Arjovsky et al. (2016) Unitary evolution recurrent
 neural networks ]]
 
 path2mnist = '/home/cadene/data/mnist_lecunn/'
+path2mnist = 'data/mnist/'
 
 batch_size = 20
 dim_h = 10
@@ -22,8 +24,18 @@ dropout = .5
 max_iteration = 1
 learning_rate = 0.02
 opt.cuda = false
+opt.seed = 1337
 
+print("# lunching using pid = "..posix.getpid("pid"))
+torch.manualSeed(opt.seed)
 torch.setdefaulttensortype('torch.FloatTensor')
+
+if opt.cuda then
+  print('# switching to CUDA')
+  require 'cutorch'
+  cutorch.setDevice(1)
+  cutorch.manualSeed(opt.seed)
+end
 
 if opt.dataset == 'toy' then
   csv = require 'util/csv'
@@ -88,15 +100,6 @@ function create_input(batch_size, dim_h, x)
   elseif opt.model == 'lstm' then
     input = {create_h0(batch_size, dim_h), create_c0(batch_size, dim_h), x}
   end
-  if opt.cuda then
-    if type(input) == 'table' then
-      for i=1,#input do
-        input[i] = input[i]:cuda()
-      end
-    else
-      input = input:cuda()
-    end
-  end
   return input
 end
 
@@ -109,6 +112,18 @@ for i=1,dataset:size() do
   dataset[i] = {}
   dataset[i][1] = create_input(batch_size, dim_h, x_train:narrow(1, start, batch_size))
   dataset[i][2] = y_train:narrow(1, start, batch_size)
+end
+if opt.cuda then
+  for i=1,dataset:size() do
+    if dataset[i][1] == 'table' then
+      for j=1,#dataset[i][1] do
+        dataset[i][1][j] = dataset[i][1][j]:cuda()
+      end
+    else
+      dataset[i][1] = dataset[i][1]:cuda()
+    end
+    dataset[i][2] = dataset[i][2]:cuda()
+  end
 end
 
 if opt.model == 'mlp' then
@@ -132,12 +147,25 @@ end
 
 criterion = nn.MSECriterion()
 
+if opt.cuda then
+  model:cuda()
+  criterion:cuda()
+end
+
 trainer = nn.StochasticGradient(model, criterion)
 trainer.maxIteration = max_iteration
 trainer.learningRate = learning_rate
 function trainer:hookIteration(iter)
   local input = create_input(n_test, dim_h, x_test)
   print(iter.."# test error = " .. criterion:forward(model:forward(input), y_test))
+end
+hookExample_count = 1
+function trainer:hookExample(example)
+  print(hookExample_count, '/', dataset:size(), 'batch')
+  hookExample_count = hookExample_count + 1
+  if hookExample_count == dataset:size() then
+    hookExample_count = 1
+  end
 end
 
 model.parameters:uniform(-0.1, 0.1) -- view article for initialization
