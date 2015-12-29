@@ -14,12 +14,14 @@ opt.dataset = 'mnist'
 and reused in Arjovsky et al. (2016) Unitary evolution recurrent
 neural networks ]]
 
+path2mnist = '/home/cadene/data/mnist_lecunn/'
+
 batch_size = 20
 dim_h = 10
 dropout = .5
 max_iteration = 1
 learning_rate = 0.02
-cuda = false
+opt.cuda = false
 
 torch.setdefaulttensortype('torch.FloatTensor')
 
@@ -50,13 +52,13 @@ elseif opt.dataset == 'mnist' then
   tensor_type = torch.getdefaulttensortype()
   len = 28*28 -- 784
   
-  trainset = mnist.traindataset('data/mnist/')
+  trainset = mnist.traindataset(path2mnist)
   n_train = trainset.size -- 60000
   x_train = trainset.data:reshape(n_train,28*28):type(tensor_type)
   y_train = trainset.label:view(n_train,1):type(tensor_type)
   trainset = nil
   
-  testset = mnist.testdataset('data/mnist/')
+  testset = mnist.testdataset(path2mnist)
   n_test = testset.size -- 10000
   x_test = testset.data:reshape(n_test,28*28):type(tensor_type)
   y_test = testset.label:view(n_test,1):type(tensor_type)
@@ -85,6 +87,15 @@ function create_input(batch_size, dim_h, x)
     input = {create_h0(batch_size, dim_h), x}
   elseif opt.model == 'lstm' then
     input = {create_h0(batch_size, dim_h), create_c0(batch_size, dim_h), x}
+  end
+  if opt.cuda then
+    if type(input) == 'table' then
+      for i=1,#input do
+        input[i] = input[i]:cuda()
+      end
+    else
+      input = input:cuda()
+    end
   end
   return input
 end
