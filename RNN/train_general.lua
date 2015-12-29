@@ -16,14 +16,14 @@ and reused in Arjovsky et al. (2016) Unitary evolution recurrent
 neural networks ]]
 
 path2mnist = '/home/cadene/data/mnist_lecunn/'
-path2mnist = 'data/mnist/'
+-- path2mnist = 'data/mnist/'
 
 batch_size = 20
 dim_h = 10
 dropout = .5
 max_iteration = 1
 learning_rate = 0.02
-opt.cuda = false
+opt.cuda = true
 opt.seed = 1337
 
 print("# lunching using pid = "..posix.getpid("pid"))
@@ -115,7 +115,7 @@ for i=1,dataset:size() do
 end
 if opt.cuda then
   for i=1,dataset:size() do
-    if dataset[i][1] == 'table' then
+    if type(dataset[i][1]) == 'table' then
       for j=1,#dataset[i][1] do
         dataset[i][1][j] = dataset[i][1][j]:cuda()
       end
@@ -148,8 +148,8 @@ end
 criterion = nn.MSECriterion()
 
 if opt.cuda then
-  model:cuda()
-  criterion:cuda()
+  model = model:cuda()
+  criterion = criterion:cuda()
 end
 
 trainer = nn.StochasticGradient(model, criterion)
