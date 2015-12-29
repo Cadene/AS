@@ -100,7 +100,22 @@ function create_input(batch_size, dim_h, x)
   elseif opt.model == 'lstm' then
     input = {create_h0(batch_size, dim_h), create_c0(batch_size, dim_h), x}
   end
+  if opt.cuda then
+    if type(input) == 'table' then
+      for i=1,#input do
+        input[i] = input[i]:cuda()
+      end
+    else
+      input = input:cuda()
+    end
+  end
   return input
+end
+function create_label(y)
+  if opt.cuda then
+    return y:cuda()
+  end
+  return y
 end
 
 dataset = {}
@@ -111,19 +126,7 @@ for i=1,dataset:size() do
   local start = (i-1)*batch_size + 1
   dataset[i] = {}
   dataset[i][1] = create_input(batch_size, dim_h, x_train:narrow(1, start, batch_size))
-  dataset[i][2] = y_train:narrow(1, start, batch_size)
-end
-if opt.cuda then
-  for i=1,dataset:size() do
-    if type(dataset[i][1]) == 'table' then
-      for j=1,#dataset[i][1] do
-        dataset[i][1][j] = dataset[i][1][j]:cuda()
-      end
-    else
-      dataset[i][1] = dataset[i][1]:cuda()
-    end
-    dataset[i][2] = dataset[i][2]:cuda()
-  end
+  dataset[i][2] = create_label(y_train:narrow(1, start, batch_size))
 end
 
 if opt.model == 'mlp' then
@@ -157,7 +160,8 @@ trainer.maxIteration = max_iteration
 trainer.learningRate = learning_rate
 function trainer:hookIteration(iter)
   local input = create_input(n_test, dim_h, x_test)
-  print(iter.."# test error = " .. criterion:forward(model:forward(input), y_test))
+  local label = create_label(y_test)
+  print(iter.."# test error = " .. criterion:forward(model:forward(input), label))
 end
 hookExample_count = 1
 function trainer:hookExample(example)
@@ -173,15 +177,18 @@ model:zeroGradParameters()
 print("parameter count: " .. model.parameters:size(1))
 print(x_test:size())
 input = create_input(n_test, dim_h, x_test)
-loss = criterion:forward(model:forward(input), y_test)
+label = create_label(y_test)
+loss = criterion:forward(model:forward(input), label)
 print("initial error before training = " .. loss) 
 trainer:train(dataset)
 input = create_input(n_test, dim_h, x_test)
-loss = criterion:forward(model:forward(input), y_test)
+label = create_label(y_test)
+loss = criterion:forward(model:forward(input), label)
 print("# testing error = " .. loss)
 
 torch.save('data/'.. opt.model ..'.t7', model)
 
+-- TODO: cuda=true not implemented
 if opt.dataset == 'toy' then
   -- for displaying
   grid_size = 100
