@@ -2,14 +2,20 @@ nn = require 'nn'
 require 'nngraph'
 posix = require 'posix'
 
+cmd = torch.CmdLine()
+
 -- set global variables 
 opt = {}
+cmd:option('-model', 'rnn', '[mlp|rnn|lstm]')
+cmd:option('-dataset', 'mnist', '[toy|mnist]')
+cmd:option('-cuda', 'true', '[true|false]')
+cmd:option('-seed', 1337, 'int : seed cpu and gpu')
+cmd:option('-batch_size', 40, 'int')
+cmd:option('-dim_h', 15, 'int')
+cmd:option('-max_iteration', 1, 'int')
+cmd:option('-learning_rate', 0.02, 'float')
+opt = cmd:parse(arg or {})
 
-opt.model = 'rnn'
---opt.model = 'lstm'
-
---opt.dataset = 'toy'
-opt.dataset = 'mnist'
 --[[ Pixel-by-pixel MNIST, task suggested by Le et al. (2015)
 (A simple way to initialize recurrent networks of rectified linear units.)
 and reused in Arjovsky et al. (2016) Unitary evolution recurrent
@@ -18,13 +24,16 @@ neural networks ]]
 path2mnist = '/home/cadene/data/mnist_lecunn/'
 -- path2mnist = 'data/mnist/'
 
-batch_size = 20
-dim_h = 10
+batch_size = opt.batch_size
+dim_h = opt.dim_h
 dropout = .5
-max_iteration = 1
-learning_rate = 0.02
-opt.cuda = true
-opt.seed = 1337
+max_iteration = opt.max_iteration
+learning_rate = opt.learning_rate
+if opt.cuda == 'true' then
+  opt.cuda = true
+else
+  opt.cuda = false
+end
 
 print("# lunching using pid = "..posix.getpid("pid"))
 torch.manualSeed(opt.seed)
