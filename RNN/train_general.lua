@@ -33,6 +33,7 @@ torch.setdefaulttensortype('torch.FloatTensor')
 if opt.cuda then
   print('# switching to CUDA')
   require 'cutorch'
+  require 'cunn'
   cutorch.setDevice(1)
   cutorch.manualSeed(opt.seed)
 end
@@ -155,6 +156,8 @@ if opt.cuda then
   criterion = criterion:cuda()
 end
 
+print(torch.type(model.parameters))
+
 trainer = nn.StochasticGradient(model, criterion)
 trainer.maxIteration = max_iteration
 trainer.learningRate = learning_rate
@@ -171,6 +174,8 @@ function trainer:hookExample(example)
     hookExample_count = 1
   end
 end
+
+
 
 model.parameters:uniform(-0.1, 0.1) -- view article for initialization
 model:zeroGradParameters()
@@ -209,4 +214,5 @@ if opt.dataset == 'toy' then
 
   print("# display error = " .. y_pred:dot(y_true:t())/grid_size)
 end
+
 -- END
